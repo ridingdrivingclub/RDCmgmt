@@ -1,25 +1,71 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../contexts/AuthContext'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
 import Logo from '../../components/Logo'
-import { Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle, CheckCircle, Loader } from 'lucide-react'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
-  const { updatePassword, user } = useAuth()
+  const [searchParams] = useSearchParams()
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [initializing, setInitializing] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
 
-  // Verify user is in password reset flow
+  // Handle Supabase recovery tokens from URL
   useEffect(() => {
-    // Supabase handles the token in URL automatically
-    // User should be authenticated in reset mode
-  }, [])
+    const handleRecoveryToken = async () => {
+      try {
+        // Check for tokens in URL hash (Supabase puts them there)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const accessToken = hashParams.get('access_token') || searchParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token')
+        const type = hashParams.get('type') || searchParams.get('type')
+
+        // If this is a recovery flow with tokens
+        if (accessToken && type === 'recovery') {
+          // Set the session using the tokens
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || ''
+          })
+
+          if (error) {
+            console.error('Session error:', error)
+            setError('Invalid or expired reset link. Please request a new password reset.')
+            setInitializing(false)
+            return
+          }
+
+          if (data.session) {
+            // Clear the URL hash/params for cleaner UX
+            window.history.replaceState(null, '', window.location.pathname)
+            setSessionReady(true)
+          }
+        } else {
+          // Check if user already has an active session (from previous token handling)
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session) {
+            setSessionReady(true)
+          } else {
+            setError('No valid reset session found. Please request a new password reset link.')
+          }
+        }
+      } catch (err) {
+        console.error('Recovery token error:', err)
+        setError('An error occurred. Please try requesting a new password reset.')
+      } finally {
+        setInitializing(false)
+      }
+    }
+
+    handleRecoveryToken()
+  }, [searchParams])
 
   const validatePassword = () => {
     if (password.length < 8) {
@@ -44,26 +90,71 @@ export default function ResetPassword() {
     setLoading(true)
 
     try {
-      const { error } = await updatePassword(password)
+      const { error } = await supabase.auth.updateUser({
+        password: password
+      })
 
       if (error) {
-        setError(error.message)
+        if (error.message.includes('should be different')) {
+          setError('New password must be different from your current password')
+        } else {
+          setError(error.message)
+        }
         return
       }
 
       setSuccess(true)
 
-      // Redirect to login after 3 seconds
+      // Sign out to clear the recovery session, then redirect to login
+      await supabase.auth.signOut()
+
       setTimeout(() => {
         navigate('/login')
       }, 3000)
     } catch (err) {
-      setError('An unexpected error occurred')
+      console.error('Password update error:', err)
+      setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
+  // Show loading while checking for recovery token
+  if (initializing) {
+    return (
+      <div className="min-h-screen bg-rdc-cream flex items-center justify-center p-6">
+        <div className="text-center">
+          <Loader size={32} className="animate-spin text-rdc-primary mx-auto mb-4" />
+          <p className="text-rdc-taupe">Verifying reset link...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error if no valid session
+  if (!sessionReady && error) {
+    return (
+      <div className="min-h-screen bg-rdc-cream flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-sm p-8 border border-rdc-cream max-w-md w-full text-center">
+          <Logo className="mb-6" />
+          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle size={32} className="text-red-500" />
+          </div>
+          <h1 className="font-display text-xl font-semibold text-black mb-2">
+            Invalid Reset Link
+          </h1>
+          <p className="text-rdc-taupe mb-6">
+            {error}
+          </p>
+          <Link to="/forgot-password" className="btn-primary inline-block">
+            Request New Reset Link
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Show success message
   if (success) {
     return (
       <div className="min-h-screen bg-rdc-cream flex items-center justify-center p-6">
@@ -87,6 +178,7 @@ export default function ResetPassword() {
     )
   }
 
+  // Show password reset form
   return (
     <div className="min-h-screen bg-rdc-cream flex items-center justify-center p-6">
       <div className="w-full max-w-md">
@@ -101,8 +193,8 @@ export default function ResetPassword() {
           </p>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
-              <AlertCircle size={20} />
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-700">
+              <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
@@ -122,11 +214,13 @@ export default function ResetPassword() {
                   placeholder="••••••••"
                   required
                   minLength={8}
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-rdc-taupe hover:text-rdc-dark-gray"
+                  tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -148,6 +242,7 @@ export default function ResetPassword() {
                 className="input-field"
                 placeholder="••••••••"
                 required
+                disabled={loading}
               />
             </div>
 
