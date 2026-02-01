@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { getInvitationByToken } from '../../lib/supabase'
+import { getInvitationByToken, supabase } from '../../lib/supabase'
 import Logo from '../../components/Logo'
 import { Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function SignUp() {
   const navigate = useNavigate()
   const { token } = useParams()
-  const { signUp } = useAuth()
+  const [searchParams] = useSearchParams()
+  const { signUp, updatePassword } = useAuth()
+
+  // Check for Supabase auth tokens in URL (from email invite)
+  const accessToken = searchParams.get('access_token') || window.location.hash?.match(/access_token=([^&]*)/)?.[1]
+  const refreshToken = searchParams.get('refresh_token') || window.location.hash?.match(/refresh_token=([^&]*)/)?.[1]
+  const type = searchParams.get('type') || window.location.hash?.match(/type=([^&]*)/)?.[1]
 
   const [invitation, setInvitation] = useState(null)
   const [invitationLoading, setInvitationLoading] = useState(!!token)
   const [invitationError, setInvitationError] = useState('')
+
+  // For Supabase invite flow (setting password after email invite)
+  const [isSettingPassword, setIsSettingPassword] = useState(false)
+  const [userEmail, setUserEmail] = useState('')
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -23,19 +33,54 @@ export default function SignUp() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
-  // Check invitation token
+  // Handle Supabase auth callback (from email invite)
   useEffect(() => {
-    if (token) {
+    const handleAuthCallback = async () => {
+      // Check if this is a Supabase invite/recovery callback
+      if (accessToken && refreshToken) {
+        try {
+          // Set the session from the tokens
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
+
+          if (error) {
+            console.error('Session error:', error)
+            setError('Invalid or expired link. Please request a new invitation.')
+            return
+          }
+
+          if (data.user) {
+            setUserEmail(data.user.email)
+            setIsSettingPassword(true)
+
+            // Clear the hash/params from URL
+            window.history.replaceState({}, document.title, window.location.pathname)
+          }
+        } catch (err) {
+          console.error('Auth callback error:', err)
+          setError('Something went wrong. Please try again.')
+        }
+      }
+    }
+
+    handleAuthCallback()
+  }, [accessToken, refreshToken])
+
+  // Check custom invitation token
+  useEffect(() => {
+    if (token && !isSettingPassword) {
       checkInvitation()
     }
-  }, [token])
+  }, [token, isSettingPassword])
 
   const checkInvitation = async () => {
     try {
       const { data, error } = await getInvitationByToken(token)
 
       if (error || !data) {
-        setInvitationError('This invitation is invalid or has expired.')
+        setInvitationError('This invitation is invalid or has expired. Please contact your Riding & Driving Club representative for a new invitation.')
         return
       }
 
@@ -43,7 +88,7 @@ export default function SignUp() {
       setEmail(data.email)
       setFullName(data.full_name || '')
     } catch (err) {
-      setInvitationError('Error verifying invitation')
+      setInvitationError('Error verifying invitation. Please try again.')
     } finally {
       setInvitationLoading(false)
     }
@@ -59,11 +104,44 @@ export default function SignUp() {
     return null
   }
 
+  // Handle setting password for Supabase invite
+  const handleSetPassword = async (e) => {
+    e.preventDefault()
+    setError('')
+
+    const passwordError = validatePassword()
+    if (passwordError) {
+      setError(passwordError)
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const { error } = await updatePassword(password)
+
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setSuccess(true)
+      setTimeout(() => {
+        navigate('/garage')
+      }, 2000)
+    } catch (err) {
+      setError('An unexpected error occurred')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle custom invitation signup
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    // Validate
     const passwordError = validatePassword()
     if (passwordError) {
       setError(passwordError)
@@ -136,21 +214,115 @@ export default function SignUp() {
             <CheckCircle size={32} className="text-green-500" />
           </div>
           <h1 className="font-display text-xl font-semibold text-black mb-2">
-            Account Created!
+            {isSettingPassword ? 'Password Set!' : 'Account Created!'}
           </h1>
           <p className="text-rdc-taupe mb-6">
-            Please check your email to verify your account, then sign in.
+            {isSettingPassword
+              ? "Your password has been set. Redirecting you to your garage..."
+              : "Please check your email to verify your account, then sign in."}
           </p>
-          <Link to="/login" className="btn-primary inline-block">
-            Go to Login
-          </Link>
+          {!isSettingPassword && (
+            <Link to="/login" className="btn-primary inline-block">
+              Go to Login
+            </Link>
+          )}
         </div>
       </div>
     )
   }
 
-  // No invitation (require token)
-  if (!token) {
+  // Setting password from Supabase email invite
+  if (isSettingPassword) {
+    return (
+      <div className="min-h-screen bg-rdc-cream flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-sm p-8 border border-rdc-cream">
+            <Logo className="mb-6" />
+
+            <h1 className="font-display text-2xl font-semibold text-black mb-2">
+              Set Your Password
+            </h1>
+            <p className="text-rdc-taupe mb-8">
+              Welcome! Create a password for <span className="font-medium text-rdc-dark-gray">{userEmail}</span>
+            </p>
+
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-700">
+                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSetPassword} className="space-y-5">
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-rdc-dark-gray mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input-field pr-12"
+                    placeholder="••••••••"
+                    required
+                    minLength={8}
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-rdc-taupe hover:text-rdc-dark-gray"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-rdc-taupe">
+                  Must be at least 8 characters
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-rdc-dark-gray mb-2">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input-field"
+                  placeholder="••••••••"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full py-3"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Setting password...
+                  </span>
+                ) : (
+                  'Set Password & Continue'
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // No invitation token provided (require invitation)
+  if (!token && !isSettingPassword) {
     return (
       <div className="min-h-screen bg-rdc-cream flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-sm p-8 border border-rdc-cream max-w-md w-full text-center">
@@ -171,6 +343,7 @@ export default function SignUp() {
     )
   }
 
+  // Custom invitation signup form
   return (
     <div className="min-h-screen bg-rdc-cream flex">
       {/* Left Panel */}
@@ -204,8 +377,8 @@ export default function SignUp() {
             </p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
-                <AlertCircle size={20} />
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-700">
+                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
                 <span className="text-sm">{error}</span>
               </div>
             )}
@@ -223,6 +396,7 @@ export default function SignUp() {
                   className="input-field"
                   placeholder="John Smith"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -253,11 +427,13 @@ export default function SignUp() {
                     placeholder="••••••••"
                     required
                     minLength={8}
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-rdc-taupe hover:text-rdc-dark-gray"
+                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
@@ -279,6 +455,7 @@ export default function SignUp() {
                   className="input-field"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
 

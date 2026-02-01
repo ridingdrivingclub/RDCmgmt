@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Logo from '../../components/Logo'
@@ -6,13 +6,24 @@ import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { signIn, isAdmin } = useAuth()
+  const { signIn, user, profile, loading: authLoading } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user && profile) {
+      if (profile.role === 'admin') {
+        navigate('/admin', { replace: true })
+      } else {
+        navigate('/garage', { replace: true })
+      }
+    }
+  }, [user, profile, authLoading, navigate])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -25,19 +36,33 @@ export default function Login() {
       if (error) {
         if (error.message.includes('Invalid login')) {
           setError('Invalid email or password')
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Please check your email and confirm your account first')
         } else {
           setError(error.message)
         }
         return
       }
 
-      // Navigation handled by auth state change
+      // Navigation will happen via useEffect when user/profile updates
     } catch (err) {
-      setError('An unexpected error occurred')
+      setError('An unexpected error occurred. Please try again.')
       console.error(err)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading while checking auth state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-rdc-cream flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-rdc-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-rdc-taupe">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -74,8 +99,8 @@ export default function Login() {
             </p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
-                <AlertCircle size={20} />
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-700">
+                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
                 <span className="text-sm">{error}</span>
               </div>
             )}
@@ -94,6 +119,7 @@ export default function Login() {
                   placeholder="you@example.com"
                   required
                   autoComplete="email"
+                  disabled={loading}
                 />
               </div>
 
@@ -119,11 +145,13 @@ export default function Login() {
                     placeholder="••••••••"
                     required
                     autoComplete="current-password"
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-rdc-taupe hover:text-rdc-dark-gray"
+                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>

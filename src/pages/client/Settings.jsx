@@ -1,15 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { updateProfile } from '../../lib/supabase'
-import { User, Lock, Bell, CheckCircle, AlertCircle } from 'lucide-react'
+import { User, Lock, Bell, CheckCircle, AlertCircle, Camera } from 'lucide-react'
 
 export default function Settings() {
   const { user, profile, refreshProfile, updatePassword } = useAuth()
 
-  const [fullName, setFullName] = useState(profile?.full_name || '')
-  const [phone, setPhone] = useState(profile?.phone || '')
+  const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [companyName, setCompanyName] = useState('')
 
-  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
@@ -18,6 +18,15 @@ export default function Settings() {
   const [profileSuccess, setProfileSuccess] = useState(false)
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  // Load profile data
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '')
+      setPhone(profile.phone || '')
+      setCompanyName(profile.company_name || '')
+    }
+  }, [profile])
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault()
@@ -28,7 +37,8 @@ export default function Settings() {
     try {
       const { error } = await updateProfile(user.id, {
         full_name: fullName,
-        phone: phone
+        phone: phone,
+        company_name: companyName
       })
 
       if (error) throw error
@@ -65,7 +75,6 @@ export default function Settings() {
 
       if (error) throw error
 
-      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
       setPasswordSuccess(true)
@@ -109,16 +118,45 @@ export default function Settings() {
         </div>
 
         <form onSubmit={handleProfileUpdate} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="input-field"
+                placeholder="Your full name"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="input-field"
+                placeholder="+1 (555) 000-0000"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
-              Full Name
+              Company / Organization
             </label>
             <input
               type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
               className="input-field"
-              required
+              placeholder="Optional"
             />
           </div>
 
@@ -133,21 +171,8 @@ export default function Settings() {
               disabled
             />
             <p className="text-xs text-rdc-taupe mt-1">
-              Contact support to change your email
+              Contact support to change your email address
             </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
-              Phone Number
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="input-field"
-              placeholder="+1 (555) 000-0000"
-            />
           </div>
 
           <div className="flex items-center gap-4 pt-2">
@@ -161,7 +186,7 @@ export default function Settings() {
             {profileSuccess && (
               <span className="flex items-center gap-1 text-sm text-green-600">
                 <CheckCircle size={16} />
-                Saved
+                Saved successfully
               </span>
             )}
           </div>
@@ -176,41 +201,43 @@ export default function Settings() {
           </div>
           <div>
             <h2 className="section-title">Change Password</h2>
-            <p className="text-sm text-rdc-taupe">Update your password</p>
+            <p className="text-sm text-rdc-taupe">Update your account password</p>
           </div>
         </div>
 
         <form onSubmit={handlePasswordUpdate} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
-              New Password
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="input-field"
-              placeholder="••••••••"
-              minLength={8}
-              required
-            />
-            <p className="text-xs text-rdc-taupe mt-1">
-              Must be at least 8 characters
-            </p>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="input-field"
+                placeholder="••••••••"
+                minLength={8}
+                required
+              />
+              <p className="text-xs text-rdc-taupe mt-1">
+                Must be at least 8 characters
+              </p>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
-              Confirm New Password
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="input-field"
-              placeholder="••••••••"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-rdc-dark-gray mb-2">
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="input-field"
+                placeholder="••••••••"
+                required
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-4 pt-2">
@@ -238,24 +265,30 @@ export default function Settings() {
             <Bell size={20} className="text-rdc-taupe" />
           </div>
           <div>
-            <h2 className="section-title">Account</h2>
-            <p className="text-sm text-rdc-taupe">Account information</p>
+            <h2 className="section-title">Account Information</h2>
+            <p className="text-sm text-rdc-taupe">Your membership details</p>
           </div>
         </div>
 
         <div className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b border-rdc-cream">
             <span className="text-rdc-taupe">Member Since</span>
-            <span className="text-black">
-              {new Date(profile?.member_since || profile?.created_at).toLocaleDateString('en-US', {
-                month: 'long',
-                year: 'numeric'
-              })}
+            <span className="text-black font-medium">
+              {profile?.member_since || profile?.created_at
+                ? new Date(profile.member_since || profile.created_at).toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric'
+                  })
+                : '—'}
             </span>
           </div>
           <div className="flex justify-between py-2 border-b border-rdc-cream">
             <span className="text-rdc-taupe">Account Type</span>
-            <span className="text-black capitalize">{profile?.role || 'Client'}</span>
+            <span className="text-black font-medium capitalize">{profile?.role || 'Client'}</span>
+          </div>
+          <div className="flex justify-between py-2">
+            <span className="text-rdc-taupe">Account Status</span>
+            <span className="text-green-600 font-medium">Active</span>
           </div>
         </div>
       </div>

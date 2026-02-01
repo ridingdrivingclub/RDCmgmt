@@ -2,7 +2,15 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getVehicles } from '../../lib/supabase'
-import { Car, ChevronRight, AlertCircle } from 'lucide-react'
+import { Car, ChevronRight, AlertCircle, Plus } from 'lucide-react'
+
+// Get time-based greeting
+const getGreeting = () => {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
 
 // Status badge component
 const StatusBadge = ({ status }) => {
@@ -61,10 +69,13 @@ const VehicleCard = ({ vehicle }) => (
 )
 
 export default function Garage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const greeting = getGreeting()
+  const firstName = profile?.full_name?.split(' ')[0] || 'there'
 
   useEffect(() => {
     loadVehicles()
@@ -95,11 +106,15 @@ export default function Garage() {
     <div className="animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="page-title">My Garage</h1>
+          <h1 className="page-title">{greeting}, {firstName}</h1>
           <p className="text-rdc-taupe mt-1">
             {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} in your collection
           </p>
         </div>
+        <Link to="/garage/add" className="btn-primary flex items-center gap-2">
+          <Plus size={18} />
+          Add Vehicle
+        </Link>
       </div>
 
       {error && (
@@ -115,10 +130,13 @@ export default function Garage() {
           <h3 className="font-display text-lg font-semibold text-black mb-2">
             No vehicles yet
           </h3>
-          <p className="text-rdc-taupe">
-            Your vehicles will appear here once they're added to your account.
-            Contact your concierge to get started.
+          <p className="text-rdc-taupe mb-6">
+            Add your first vehicle to start managing your collection.
           </p>
+          <Link to="/garage/add" className="btn-primary inline-flex items-center gap-2">
+            <Plus size={18} />
+            Add Your First Vehicle
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getServiceRecords, getVehicles } from '../../lib/supabase'
 import { format } from 'date-fns'
-import { Wrench, Filter, AlertCircle } from 'lucide-react'
+import { Wrench, Filter, AlertCircle, Plus } from 'lucide-react'
 
 export default function ServiceHistory() {
   const { user } = useAuth()
@@ -44,7 +45,7 @@ export default function ServiceHistory() {
     ? records
     : records.filter(r => r.vehicle_id === filterVehicle)
 
-  const totalCost = filteredRecords.reduce((sum, r) => sum + (r.total_cost || 0), 0)
+  const totalCost = filteredRecords.reduce((sum, r) => sum + (r.cost || r.total_cost || 0), 0)
 
   if (loading) {
     return (
@@ -64,24 +65,34 @@ export default function ServiceHistory() {
           </p>
         </div>
 
-        {/* Filter */}
-        {vehicles.length > 1 && (
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-rdc-taupe" />
-            <select
-              value={filterVehicle}
-              onChange={(e) => setFilterVehicle(e.target.value)}
-              className="input-field py-2 pr-10"
-            >
-              <option value="all">All Vehicles</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.year} {v.make} {v.model}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Filter */}
+          {vehicles.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-rdc-taupe" />
+              <select
+                value={filterVehicle}
+                onChange={(e) => setFilterVehicle(e.target.value)}
+                className="input-field py-2 pr-10"
+              >
+                <option value="all">All Vehicles</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.year} {v.make} {v.model}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Add Service Record Button */}
+          {vehicles.length > 0 && (
+            <Link to="/service-history/add" className="btn-primary">
+              <Plus size={18} className="mr-2" />
+              Add Record
+            </Link>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -97,9 +108,22 @@ export default function ServiceHistory() {
           <h3 className="font-display text-lg font-semibold text-black mb-2">
             No service records
           </h3>
-          <p className="text-rdc-taupe">
-            Service records will appear here once they're logged.
+          <p className="text-rdc-taupe mb-4">
+            {vehicles.length > 0
+              ? 'Start logging your maintenance and service work.'
+              : 'Add a vehicle first, then you can log service records.'}
           </p>
+          {vehicles.length > 0 ? (
+            <Link to="/service-history/add" className="btn-primary">
+              <Plus size={18} className="mr-2" />
+              Add Your First Record
+            </Link>
+          ) : (
+            <Link to="/garage/add" className="btn-primary">
+              <Plus size={18} className="mr-2" />
+              Add Your First Vehicle
+            </Link>
+          )}
         </div>
       ) : (
         <>
@@ -109,7 +133,7 @@ export default function ServiceHistory() {
             <div className="hidden md:grid grid-cols-[1fr_1.5fr_1fr_1fr_100px] gap-4 px-5 py-3 bg-rdc-cream text-xs font-semibold text-rdc-taupe uppercase tracking-wide">
               <div>Date</div>
               <div>Service</div>
-              <div>Vendor</div>
+              <div>Performed By</div>
               <div>Notes</div>
               <div className="text-right">Cost</div>
             </div>
@@ -128,23 +152,26 @@ export default function ServiceHistory() {
                         {format(new Date(record.service_date), 'MMM d, yyyy')}
                       </div>
                       <div className="text-xs text-rdc-taupe">
-                        {record.mileage_at_service?.toLocaleString()} mi
+                        {record.mileage?.toLocaleString() || record.mileage_at_service?.toLocaleString() || '—'} mi
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-black">{record.service_type}</div>
+                      <div className="text-sm text-black capitalize">{record.service_type}</div>
                       <div className="text-xs text-rdc-taupe">
                         {vehicle?.year} {vehicle?.make} {vehicle?.model}
                       </div>
+                      {record.description && (
+                        <div className="text-xs text-rdc-dark-gray mt-1">{record.description}</div>
+                      )}
                     </div>
                     <div className="text-sm text-rdc-dark-gray">
-                      {record.vendor_name}
+                      {record.performed_by || record.vendor_name || '—'}
                     </div>
                     <div className="text-sm text-rdc-taupe line-clamp-2">
-                      {record.notes}
+                      {record.notes || '—'}
                     </div>
                     <div className="text-sm font-semibold text-rdc-forest md:text-right">
-                      ${record.total_cost?.toLocaleString() || 0}
+                      ${(record.cost || record.total_cost || 0).toLocaleString()}
                     </div>
                   </div>
                 )

@@ -11,7 +11,10 @@ import ResetPassword from './pages/auth/ResetPassword'
 import ClientLayout from './layouts/ClientLayout'
 import Garage from './pages/client/Garage'
 import VehicleDetail from './pages/client/VehicleDetail'
+import AddVehicle from './pages/client/AddVehicle'
+import EditVehicle from './pages/client/EditVehicle'
 import ServiceHistory from './pages/client/ServiceHistory'
+import AddServiceRecord from './pages/client/AddServiceRecord'
 import Appointments from './pages/client/Appointments'
 import Concierge from './pages/client/Concierge'
 import Documents from './pages/client/Documents'
@@ -98,8 +101,11 @@ function App() {
       >
         <Route index element={<Navigate to="/garage" replace />} />
         <Route path="garage" element={<Garage />} />
+        <Route path="garage/add" element={<AddVehicle />} />
         <Route path="garage/:vehicleId" element={<VehicleDetail />} />
+        <Route path="garage/:vehicleId/edit" element={<EditVehicle />} />
         <Route path="service-history" element={<ServiceHistory />} />
+        <Route path="service-history/add" element={<AddServiceRecord />} />
         <Route path="appointments" element={<Appointments />} />
         <Route path="concierge" element={<Concierge />} />
         <Route path="documents" element={<Documents />} />
